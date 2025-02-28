@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IP Camera FastRTC Stream</title>
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        video {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            display: block;
+            background: #000;
+        }
+        .status {
+            text-align: center;
+            margin: 10px 0;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>IP Camera Stream (FastRTC)</h1>
+        <video id="video" autoplay playsinline></video>
+        <div id="status" class="status">Connecting...</div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const status = document.getElementById('status');
+        
+        const pc = new RTCPeerConnection({
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' }
+            ]
+        });
+
+        // WebSocket connection
+        const ws = new WebSocket(`ws://${window.location.host}/ws`);
+
+        pc.ontrack = (event) => {
+            if (event.track.kind === 'video') {
+                video.srcObject = event.streams[0];
+                status.textContent = 'Connected';
+            }
+        };
+
+        pc.onicecandidate = (event) => {
+            if (event.candidate) {
+                ws.send(JSON.stringify({
+                    type: 'ice-candidate',
+                    candidate: event.candidate
+                }));
+            }
+        };
+
+        ws.onopen = async () => {
+            try {
+                const offer = await pc.createOffer({
+                    offerToReceiveVideo: true
+                });
+                await pc.setLocalDescription(offer);
+                
+                ws.send(JSON.stringify({
+                    type: 'offer',
+                    sdp: pc.localDescription
+                }));
+            } catch (e) {
+                console.error('Error creating offer:', e);
+                status.textContent = 'Error: ' + e.message;
+            }
+        };
+
+        ws.onmessage = async (event) => {
+            const data = JSON.parse(event.data);
+            
+            if (data.type === 'answer') {
+                try {
+                    await pc.setRemoteDescription(data.sdp);
+                } catch (e) {
+                    console.error('Error setting remote description:', e);
+                    status.textContent = 'Error: ' + e.message;
+                }
+            }
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            status.textContent = 'Connection error';
+        };
+
+        ws.onclose = () => {
+            status.textContent = 'Disconnected';
+        };
+    </script>
+</body>
+</html>
