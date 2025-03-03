@@ -28,7 +28,7 @@ class VideoStreamTrack(MediaStreamTrack):
         ret, frame = self.cap.read()
         if not ret:
             return None
-        
+
         # Convert frame to RGB
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame = self.relay.frame_from_ndarray(frame)
